@@ -9,6 +9,7 @@ pd.options.mode.chained_assignment = None
 COLUMN_MODSEQ = "Modified sequence"
 COLUMN_LEADRAZPROT = "Leading razor protein"
 COLUMN_MODPROB = "Acetyl (K) Probabilities"
+COLUMN_ID = "id"
 MODTYPE = "(ac)"
 
 ##### new columns
@@ -206,7 +207,6 @@ def add_COLUMN_SITES_and_PROB_2_df(df):
         COLUMN_SITES_list.append(";".join([str(ele + start_pos) for ele in sites_list]))
 
         pos_2_prob_dict = parse_probabilities_grep_pos_2_prob(pepseq_prob, {})
-        # COLUMN_PROB_list.append(";".join([str(pos_2_prob_dict[key]) for key in pos_2_prob_dict if key in sites_list])) #!!! order
         COLUMN_PROB_list.append(";".join([str(pos_2_prob_dict[site_]) for site_ in sites_list]))
     df[COLUMN_SITES] = COLUMN_SITES_list
     df[COLUMN_PROB] = COLUMN_PROB_list
@@ -236,12 +236,9 @@ def run_sites(fn_fasta, fn_evidence, fn_output, probability_threshold, conventio
     fa.parse_fasta()
 
     df = pd.read_csv(fn_evidence, sep='\t')
-    cols_needed = [COLUMN_MODSEQ, COLUMN_MODPROB, COLUMN_LEADRAZPROT]
+    cols_needed = [COLUMN_MODSEQ, COLUMN_MODPROB, COLUMN_LEADRAZPROT, COLUMN_ID]
     df = df[cols_needed]
     df.dropna(axis=0, how="all", inplace=True)
-
-
-    df = df.iloc[0:100]
 
     # choose first AN if mulitple ANs in COLUMN_LEADRAZPROT
     df[COLUMN_LEADRAZPROT] = df[COLUMN_LEADRAZPROT].apply(select_first_of_colon_sep)
@@ -264,10 +261,10 @@ def run_sites(fn_fasta, fn_evidence, fn_output, probability_threshold, conventio
         df[COLUMN_SITES] = df[COLUMN_SITES].apply(start_counting_from_num, args=(conventional_counting, )) #lambda num_string: ";".join([str(int(float(num))) + conventional_counting for num in num_string.split(";")])
 
     # keep only relevant columns and write to file
-    df2write = df[[COLUMN_MODSEQ, COLUMN_MODPROB, COLUMN_LEADRAZPROT, COLUMN_SITES, COLUMN_PROB]]
+    df2write = df[[COLUMN_ID, COLUMN_MODSEQ, COLUMN_MODPROB, COLUMN_LEADRAZPROT, COLUMN_SITES, COLUMN_PROB]]
     df2write[COLUMN_SITES] = df2write[COLUMN_SITES].apply(lambda ele: ele.replace(".0", ""))
     df2write.to_csv(fn_output, sep='\t', header=True, index=False)
-    return df2write
+    # return df2write
 
 
 if __name__ == "__main__":
@@ -297,6 +294,7 @@ if __name__ == "__main__":
     fn_output = args.fn_output
     probability_threshold = args.probability_threshold
     conventional_counting = args.conventional_counting
+    remove_n_terminal_acetylation = args.ignore_nterm
 
     if debug:
         fn_fasta = r"/Users/dblyon/CloudStation/CPR/BTW_sites/MOUSE20150706.fasta"
@@ -323,6 +321,6 @@ if __name__ == "__main__":
     for arg in sorted(vars(args)):
         print(arg, ": ", getattr(args, arg))
 
-    run_sites(fn_fasta, fn_evidence, fn_output, probability_threshold, conventional_counting)
+    run_sites(fn_fasta, fn_evidence, fn_output, probability_threshold, conventional_counting, remove_n_terminal_acetylation)
     print("\n...finished processing.\nClose this shell window and publish big.")
     print("#" * 80)
