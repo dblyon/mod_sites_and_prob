@@ -3,9 +3,6 @@ import re, sys, argparse
 import pandas as pd
 import numpy as np
 
-pd.options.mode.chained_assignment = None
-
-
 COLUMN_MODSEQ = "Modified sequence"
 COLUMN_LEADRAZPROT = "Leading razor protein"
 COLUMN_MODPROB = "Acetyl (K) Probabilities"
@@ -235,7 +232,7 @@ def run_sites(fn_fasta, fn_evidence, fn_output, probability_threshold, conventio
     fa.set_file(fn_fasta)
     fa.parse_fasta()
 
-    df = pd.read_csv(fn_evidence, sep='\t')
+    df = pd.read_csv(fn_evidence, sep='\t', low_memory=False)
     cols_needed = [COLUMN_MODSEQ, COLUMN_MODPROB, COLUMN_LEADRAZPROT, COLUMN_ID]
     df = df[cols_needed]
     df.dropna(axis=0, how="all", inplace=True)
