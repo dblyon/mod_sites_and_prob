@@ -3,6 +3,8 @@ import re, sys, argparse
 import pandas as pd
 import numpy as np
 
+pd.options.mode.chained_assignment = None
+
 
 COLUMN_MODSEQ = "Modified sequence"
 COLUMN_LEADRAZPROT = "Leading razor protein"
@@ -52,7 +54,7 @@ class Fasta(object):
             header, aaseq = entry
             match = re.search(self.my_regex, header)
             if match:  # at least one regex found something
-                match_groups = filter(None, match.groups())  # #!!! start, since Fasta entries not consistent
+                match_groups = filter(None, match.groups())
                 if len(match_groups) == 3:
                     database, an, TaxName = match_groups
                     an = an.strip()
@@ -167,8 +169,11 @@ def parse_probabilities_grep_pos_2_prob(aaseq, pos_2_prob_dict):
     aaseq = aaseq[:start_index] + aaseq[stop_index + 1:]
     return parse_probabilities_grep_pos_2_prob(aaseq, pos_2_prob_dict)
 
-def remove_modifications_not_MODTYPE(aaseq, my_regex):
+def remove_modifications_not_MODTYPE(aaseq, my_regex, remove_n_terminal_acetylation):
     strings_2_replace = []
+    if remove_n_terminal_acetylation:
+        if aaseq.startswith("_(ac)"):
+            aaseq = aaseq.replace("_(ac)", "_")
     aaseq = aaseq.replace("_", "")
     for match in my_regex.finditer(aaseq):
         modification = match.group()
@@ -201,9 +206,10 @@ def add_COLUMN_SITES_and_PROB_2_df(df):
         COLUMN_SITES_list.append(";".join([str(ele + start_pos) for ele in sites_list]))
 
         pos_2_prob_dict = parse_probabilities_grep_pos_2_prob(pepseq_prob, {})
-        COLUMN_PROB_list.append(";".join([str(pos_2_prob_dict[key]) for key in pos_2_prob_dict if key in sites_list]))
-    df[COLUMN_SITES] = pd.Series(COLUMN_SITES_list)
-    df[COLUMN_PROB] = pd.Series(COLUMN_PROB_list)
+        # COLUMN_PROB_list.append(";".join([str(pos_2_prob_dict[key]) for key in pos_2_prob_dict if key in sites_list])) #!!! order
+        COLUMN_PROB_list.append(";".join([str(pos_2_prob_dict[site_]) for site_ in sites_list]))
+    df[COLUMN_SITES] = COLUMN_SITES_list
+    df[COLUMN_PROB] = COLUMN_PROB_list
     return df
 
 def is_any_above_threshold(numbers_as_string, probability_threshold):
@@ -224,7 +230,7 @@ def start_counting_from_num(num_string, conventional_counting):
         return ""
     return ";".join([str(float(num) + conventional_counting) for num in num_string_split])
 
-def run_sites(fn_fasta, fn_evidence, fn_output, probability_threshold, conventional_counting):
+def run_sites(fn_fasta, fn_evidence, fn_output, probability_threshold, conventional_counting, remove_n_terminal_acetylation):
     fa = Fasta()
     fa.set_file(fn_fasta)
     fa.parse_fasta()
@@ -233,6 +239,9 @@ def run_sites(fn_fasta, fn_evidence, fn_output, probability_threshold, conventio
     cols_needed = [COLUMN_MODSEQ, COLUMN_MODPROB, COLUMN_LEADRAZPROT]
     df = df[cols_needed]
     df.dropna(axis=0, how="all", inplace=True)
+
+
+    df = df.iloc[0:100]
 
     # choose first AN if mulitple ANs in COLUMN_LEADRAZPROT
     df[COLUMN_LEADRAZPROT] = df[COLUMN_LEADRAZPROT].apply(select_first_of_colon_sep)
@@ -244,7 +253,7 @@ def run_sites(fn_fasta, fn_evidence, fn_output, probability_threshold, conventio
 
     # add sites and probabilities
     my_regex = re.compile(r"(\(\w+\))")
-    df["pepseq_mod"] = df[COLUMN_MODSEQ].apply(remove_modifications_not_MODTYPE, args=(my_regex,))
+    df["pepseq_mod"] = df[COLUMN_MODSEQ].apply(remove_modifications_not_MODTYPE, args=(my_regex, remove_n_terminal_acetylation, ))
     df = add_COLUMN_SITES_and_PROB_2_df(df)
     df = df[df[COLUMN_SITES].notnull()]
 
@@ -256,6 +265,7 @@ def run_sites(fn_fasta, fn_evidence, fn_output, probability_threshold, conventio
 
     # keep only relevant columns and write to file
     df2write = df[[COLUMN_MODSEQ, COLUMN_MODPROB, COLUMN_LEADRAZPROT, COLUMN_SITES, COLUMN_PROB]]
+    df2write[COLUMN_SITES] = df2write[COLUMN_SITES].apply(lambda ele: ele.replace(".0", ""))
     df2write.to_csv(fn_output, sep='\t', header=True, index=False)
     return df2write
 
@@ -267,7 +277,7 @@ if __name__ == "__main__":
 
     parser.add_argument("-fa", "--fn_fasta", help="FASTA file absolute path", type=str, default=r"O:\Proteomics\USERS\BTW\FASTA\MOUSE20150706.fasta")
 
-    parser.add_argument("-ev", "--fn_evidence", help="MaxQuant evidence file absolute path", type=str)
+    parser.add_argument("-ev", "--fn_evidence", help="MaxQuant evidence file absolute path", type=str, default=r"O:\Proteomics\USERS\BTW\FASTA\evidence.txt")
 
     parser.add_argument("-o", "--fn_output", help="Output file name absolute path (defaults to 'EvidenceFileName_sites.txt')", type=str, default=None)
 
@@ -278,6 +288,8 @@ if __name__ == "__main__":
     parser.add_argument("-thr", "--probability_threshold", help="Filter threshold based on localisation probability (default=1.0 nothing removed), e.g. 0.9 for 90 percent", type=float, default=1.0)
 
     parser.add_argument("-cc", "--conventional_counting", help="Start counting from 0 or from 1 (default=1, meaning start from 1)", type=int, default=1)
+
+    parser.add_argument("-ignt", "--ignore_nterm", help="Ignore N-terminal acetylation (default=True)", type=bool, default=True)
 
     args = parser.parse_args()
     fn_fasta = args.fn_fasta
@@ -290,6 +302,7 @@ if __name__ == "__main__":
         fn_fasta = r"/Users/dblyon/CloudStation/CPR/BTW_sites/MOUSE20150706.fasta"
         fn_evidence = r"/Users/dblyon/CloudStation/CPR/BTW_sites/evidence.txt"
         fn_output = r"/Users/dblyon/CloudStation/CPR/BTW_sites/evidence_output.txt"
+        remove_n_terminal_acetylation = True
 
     if args.fn_output is None:
         fn_output = fn_evidence.replace(".txt", "_sites.txt")
