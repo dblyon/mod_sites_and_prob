@@ -321,3 +321,6 @@ if __name__ == "__main__":
     run_sites(fn_fasta, fn_evidence, fn_output, probability_threshold, conventional_counting, remove_n_terminal_acetylation)
     print("\n...finished processing.\nClose this shell window and publish big.")
     print("#" * 80)
+
+    ## progress bar TQDM
+    # https://pypi.python.org/pypi/tqdm

@@ -25,7 +25,8 @@ class Fasta(object):
         """
         organism_regexes = [
             r"^>(dbj|emb|na|sp|tr|gb|ref)\|(.*?)\|.*?OS=(.*?)\s(?:(?:\w+=\w+\s?)+)(?:NCBI_TaxID=(\d+))?",
-            r"^>([s|t][p|r])\|([\w]+).*?OS=(.*?) [A-Z][A-Z]=",
+            # r"^>([s|t][p|r])\|([\w]+).*?OS=(.*?) [A-Z][A-Z]=",
+            r"^>([s|t][p|r])\|(.*)\|.*?OS=(.*?) (?:[A-Z][A-Z]=)?",  # get Isoforms e.g. "A0AUZ9-2", make OS blabla optional
             r"^>gi\|\d+\|(\w+)\|(\w+\.\d).*\[(.*)\]",
             r"^>([^ ]+) ([^\[]+)"]
         self.my_regex = re.compile('|'.join(organism_regexes))
@@ -827,42 +828,60 @@ if __name__ == "__main__":
         run(args.fn_fasta, fn_mq, fn_out_lysc, fn_out_ptm, args.aaseq_cut_length, args.modification_name)
 
     else:
-        missed_cleavages = 2
+        missed_cleavages = 3
         min_length = 7
         max_length = 43
         enzyme = "trypsin"
         AA = "K"
-        fn_fasta = r"/Users/dblyon/CloudStation/CPR/BTW_Stoichy/EC_K12_20140630.fasta"
-        fn_out = r"/Users/dblyon/CloudStation/CPR/BTW_Stoichy/EC_K12_20140630_InternalLysines_2MC_countOnce.txt"
+
+        fn_fasta = r"/Volumes/cpr-1/Proteomics/USERS/BTW/FASTA/YEAST_s288c_20150706.fasta"
+        fn_out = r"/Volumes/cpr-1/Proteomics/USERS/BTW/FASTA/YEAST_s288c_20150706_internal_Lysines.txt"
 
         fa = Fasta()
         fa.set_file(fn_fasta)
         fa.parse_fasta()
-        an = "A5A619"
-        aaseq = fa.get_aaseq_from_an(an)
-        print(aaseq)
-        peptide_list = cleave(aaseq, expasy_rules[enzyme], missed_cleavages, min_length)
-        print(peptide_list)
-        num_internal_lysines = count_number_of_internal_AA_without_counting_position_mulitple_times(aaseq, enzyme, missed_cleavages, min_length, max_length, AA)
-        print(num_internal_lysines)
+
         with open(fn_out, "w") as fh_out:
-            header = "UniProtAN\tNumInternalLys\n"
-            fh_out.write(header)
+            ### write header
+            header = "UniProtAN\t"
+            for mc in range(0, missed_cleavages + 1):
+                header += "NumInternalLys (MC={})\t".format(mc)
+            fh_out.write(header.rstrip() + "\n")
+
+            ## for every protein do digest for 0 to n missed cleavages
             for an in sorted(fa.an2aaseq_dict.keys()):
                 aaseq = fa.an2aaseq_dict[an]
+                line_2_write = an + "\t"
+                for mc in range(0, missed_cleavages + 1):
 
-                ### always count version:
-                # peptide_list = cleave(aaseq, expasy_rules[enzyme], missed_cleavages, min_length)
-                # if max_length is not None:
-                #     peptide_list = [ele for ele in peptide_list if len(ele) <= max_length]
-                # num_internal_lysines = count_number_of_internal_lysines(peptide_list)
+                    ### Version A: always count version:
+                    # peptide_list = cleave(aaseq, expasy_rules[enzyme], mc, min_length)
+                    # if max_length is not None:
+                    #     peptide_list = [ele for ele in peptide_list if len(ele) <= max_length]
+                    # num_internal_lysines = count_number_of_internal_lysines(peptide_list)
 
-                ### count only once version:
-                num_internal_lysines = count_number_of_internal_AA_without_counting_position_mulitple_times(aaseq, enzyme, missed_cleavages, min_length, max_length, AA)
+                    ### Version B: count only once version:
+                    num_internal_lysines = count_number_of_internal_AA_without_counting_position_mulitple_times(aaseq, enzyme, mc, min_length, max_length, AA)
+                    line_2_write += str(num_internal_lysines) + "\t"
 
-                line_2_write = "{}\t{}\n".format(an, num_internal_lysines)
-                fh_out.write(line_2_write)
+                fh_out.write(line_2_write.rstrip() + "\n")
 
 
+        ###### TESTING STUFF
+        ### Testing an example for trypsin KP rule
+        # aaseq = "MHTPIGVKPVAGSK"
+        # print(aaseq)
+        # peptide_list = cleave(aaseq, expasy_rules[enzyme], missed_cleavages, min_length)
+        # print(peptide_list)
+        # num_internal_lysines = count_number_of_internal_AA_without_counting_position_mulitple_times(aaseq, enzyme, missed_cleavages, min_length, max_length, AA)
+        # print(num_internal_lysines)
 
+        ### checking a specific AccessionNumber
+        # an = "A5A619"
+        # aaseq = fa.get_aaseq_from_an(an)
+        # print(aaseq)
+        # peptide_list = cleave(aaseq, expasy_rules[enzyme], missed_cleavages, min_length)
+        # print(peptide_list)
+        # num_internal_lysines = count_number_of_internal_AA_without_counting_position_mulitple_times(aaseq, enzyme, missed_cleavages, min_length, max_length, AA)
+        # print(num_internal_lysines)
 
