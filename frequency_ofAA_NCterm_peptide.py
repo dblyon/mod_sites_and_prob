@@ -5,22 +5,28 @@ import itertools
 from tqdm import tqdm
 
 
-def run(fn_fasta, fn_out, aa_2_count="K", enzyme="trypin", missed_cleavages=2, min_length=7, max_length=25):
-    print("#" * 80)
+def run(fn_fasta, fn_out, aa_2_count="K", enzyme_first="arg-c", missed_cleavages_first=0, enzyme_second="lysc", missed_cleavages_second=1, min_length=7, max_length=25):
+    print("#" * 120)
     print("\tfantastic script is doing stuff\n".upper())
     print("\tplease stay where you are, the successful completion is not dependendant on your location, but as soon as you finished reading this it will most probably be finished anyway...\n")
+    print("if not or entertain yourself: {}\n".format("https://xkcd.com/"))
     fa = Fasta()
     fa.set_file(fn_fasta)
     fa.parse_fasta()
     peptide_list = []
     for an, aaseq in tqdm(fa.an2aaseq_dict.items()):
-        peptide_list += cleave(aaseq, expasy_rules[enzyme], missed_cleavages=missed_cleavages, min_length=min_length)
+        peptide_list_temp = cleave(aaseq, expasy_rules[enzyme_first], missed_cleavages=missed_cleavages_first, min_length=min_length)
+        for peptide in peptide_list_temp:
+            peptide_list += cleave(peptide, expasy_rules[enzyme_second], missed_cleavages=missed_cleavages_second, min_length=min_length)
 
     if max_length is not None:
         peptide_list = [ele for ele in peptide_list if len(ele) <= max_length]
 
+    # restrict list to peptides with internal Lysines
+    peptide_list = [ele for ele in peptide_list if aa_2_count in ele[:-1]]
+
     N_0, N_1, N_2, N_3 = 0, 0, 0, 0
-    C_0, C_1, C_2, C_3 = 0, 0, 0, 0
+    C_0, C_1, C_2, C_3, C_4 = 0, 0, 0, 0, 0
     for peptide in peptide_list:
         peptide_as_list = list(peptide)
         if peptide_as_list[0] == aa_2_count:
@@ -40,6 +46,8 @@ def run(fn_fasta, fn_out, aa_2_count="K", enzyme="trypin", missed_cleavages=2, m
             C_2 += 1
         if peptide_as_list[-4] == aa_2_count:
             C_3 += 1
+        if peptide_as_list[-5] == aa_2_count:
+            C_4 += 1
 
     with open(fn_out, "w") as fh_out:
         fh_out.write("Position\tCount\n")
@@ -47,13 +55,14 @@ def run(fn_fasta, fn_out, aa_2_count="K", enzyme="trypin", missed_cleavages=2, m
         fh_out.write("N2\t{}\n".format(str(N_1)))
         fh_out.write("N3\t{}\n".format(str(N_2)))
         fh_out.write("N4\t{}\n".format(str(N_3)))
+        fh_out.write("C5\t{}\n".format(str(C_4)))
         fh_out.write("C4\t{}\n".format(str(C_3)))
         fh_out.write("C3\t{}\n".format(str(C_2)))
         fh_out.write("C2\t{}\n".format(str(C_1)))
         fh_out.write("C1\t{}\n".format(str(C_0)))
+        fh_out.write("Number of peptides with internal {}: {}\n".format(aa_2_count, str(len(peptide_list))))
 
     print("\n...finished processing.\nClose the terminal and spend some time with your kids.\n")
-    print("or entertain yourself: {}\n you deserve it.".format("https://xkcd.com/"))
     print("#" * 80)
 
 
@@ -478,15 +487,21 @@ def _cleave(sequence, rule, missed_cleavages=2, min_length=7, **kwargs):
 
 
 if __name__ == "__main__":
-    missed_cleavages = 2
-    min_length = 7
-    max_length = 25 # None
-    enzyme = "trypsin" # "trypsin_no_exceptions"
-    # Please note: "trypsin" adheres to expasy rules (http://web.expasy.org/peptide_cutter/peptidecutter_enzymes.html#Tryps)
-    # "trypsin_no_exceptions" simply cuts at "K" or "R" without any exceptions.
     aa_2_count = "K"
+
+    enzyme_first = "arg-c"
+    missed_cleavages_first = 0
+
+    enzyme_second = "lysc"
+    missed_cleavages_second = 1
+
+    min_length = 7
+    max_length = 25
+
     # fn_fasta = r"/Volumes/cpr-1/Proteomics/USERS/BTW/FASTA/YEAST_s288c_20150706.fasta"
-    fn_fasta = r"/Volumes/Speedy/FASTA/Escherichia_coli_RefProt_20170505.fasta"
+    # fn_fasta = r"/Volumes/Speedy/FASTA/Escherichia_coli_RefProt_20170505.fasta"
     # fn_out = r"/Volumes/cpr-1/Proteomics/USERS/BTW/FASTA/YEAST_s288c_20150706_internal_Lysines.txt"
+    # fn_fasta = r"/Users/dblyon/Downloads/uniprot-proteome%3AUP000005640.fasta"
+    fn_fasta = r"/Volumes/Speedy/FASTA/HUMAN20150706.fasta" #MOUSE20150706.fasta"
     fn_out = r"/Users/dblyon/Downloads/test_output.txt"
-    run(fn_fasta, fn_out, aa_2_count, enzyme, missed_cleavages, min_length, max_length)
+    run(fn_fasta, fn_out, aa_2_count, enzyme_first, missed_cleavages_first, enzyme_second, missed_cleavages_second, min_length, max_length)
